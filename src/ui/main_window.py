@@ -13,6 +13,7 @@ import os
 import psutil
 from datetime import datetime
 from .settings_widget import AyarlarWidget
+from .threat_analysis_window import TehditAnalizPenceresi
 
 class AnaEkran(QMainWindow):
     """ThreatTracker ana pencere sınıfı."""
@@ -128,30 +129,55 @@ class AnaEkran(QMainWindow):
         
         # Tehdit listesi
         self.tehdit_tablosu = QTableWidget()
-        self.tehdit_tablosu.setColumnCount(6)
+        self.tehdit_tablosu.setColumnCount(5)
         self.tehdit_tablosu.setHorizontalHeaderLabels([
-            "ID", "Tip", "Önem", "Kaynak IP", "Hedef IP", "Durum"
+            "Tespit Zamanı", "Tehdit", "Seviye", "Kaynak", "Durum"
         ])
         self.tehdit_tablosu.horizontalHeader().setStretchLastSection(True)
+        self.tehdit_tablosu.itemDoubleClicked.connect(self._tehdit_detaylarini_goster)
         
         tehditler_layout.addWidget(self.tehdit_tablosu)
         
-        # Kontrol butonları
-        butonlar_widget = QWidget()
-        butonlar_layout = QHBoxLayout(butonlar_widget)
-        
-        self.incele_buton = QPushButton("İncele")
-        self.cozuldu_buton = QPushButton("Çözüldü")
-        self.yenile_buton = QPushButton("Yenile")
-        
-        butonlar_layout.addWidget(self.incele_buton)
-        butonlar_layout.addWidget(self.cozuldu_buton)
-        butonlar_layout.addStretch()
-        butonlar_layout.addWidget(self.yenile_buton)
-        
-        tehditler_layout.addWidget(butonlar_widget)
-        
         self.tab_widget.addTab(tehditler_widget, "Tehditler")
+    
+    def _tehdit_detaylarini_goster(self, item):
+        """Seçilen tehdidin detaylarını gösterir.
+        
+        Args:
+            item: Tıklanan tablo öğesi
+        """
+        row = item.row()
+        tehdit_bilgisi = {
+            'baslik': self.tehdit_tablosu.item(row, 1).text(),
+            'seviye': self.tehdit_tablosu.item(row, 2).text(),
+            'kaynak': self.tehdit_tablosu.item(row, 3).text(),
+            'durum': self.tehdit_tablosu.item(row, 4).text(),
+            'tespit_zamani': datetime.strptime(
+                self.tehdit_tablosu.item(row, 0).text(),
+                '%d.%m.%Y %H:%M:%S'
+            ),
+            'ilgili_olaylar': [
+                {
+                    'zaman': '12.01.2024 15:30:45',
+                    'tur': 'Port Tarama',
+                    'aciklama': 'Şüpheli port tarama aktivitesi tespit edildi'
+                },
+                {
+                    'zaman': '12.01.2024 15:31:00',
+                    'tur': 'Bağlantı Girişimi',
+                    'aciklama': 'Yüksek riskli porta bağlantı denemesi'
+                }
+            ],
+            'oneriler': [
+                'Şüpheli IP adresini güvenlik duvarında engelleyin',
+                'Sistem loglarını detaylı inceleyerek benzer aktiviteleri kontrol edin',
+                'İlgili portları geçici olarak kapatmayı değerlendirin',
+                'Güvenlik yazılımlarını güncelleyin'
+            ]
+        }
+        
+        analiz_penceresi = TehditAnalizPenceresi(tehdit_bilgisi)
+        analiz_penceresi.show()
     
     def _sistem_durumu_sekmesi_olustur(self):
         """Sistem durumu sekmesini oluşturur."""
