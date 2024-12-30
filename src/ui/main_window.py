@@ -2,623 +2,364 @@
 # -*- coding: utf-8 -*-
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QTabWidget, QPushButton, QLabel, QStatusBar,
-    QTableWidget, QTableWidgetItem, QProgressBar, QGroupBox
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLabel, QTableWidget, QTableWidgetItem,
+    QStatusBar, QTabWidget, QProgressBar
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon, QColor
-from typing import Dict, List
-import os
+from PyQt6.QtGui import QFont, QPalette, QColor
 import psutil
-from datetime import datetime
-from .settings_widget import AyarlarWidget
-from .threat_analysis_window import TehditAnalizPenceresi
-from src.core.network_scanner import NetworkScanner
-import netifaces
+import datetime
+from loguru import logger
 
-class AnaEkran(QMainWindow):
-    """ThreatTracker ana pencere sınıfı."""
+class MainWindow(QMainWindow):
+    """Ana pencere sınıfı."""
     
     def __init__(self):
+        """MainWindow sınıfının başlatıcısı."""
         super().__init__()
-        self.setWindowTitle("ThreatTracker - Advanced Network Security Tool")
-        self.setMinimumSize(1200, 800)
-        self.setStyleSheet("""
-            QMainWindow, QWidget {
-                background-color: #0a0a0a;
-                color: #33ff33;
-            }
-            QLabel {
-                color: #33ff33;
-                font-family: 'Courier New';
-            }
-            QTableWidget {
-                background-color: #1a1a1a;
-                color: #33ff33;
-                gridline-color: #1f5c1f;
-                border: 1px solid #1f5c1f;
-                selection-background-color: #2d862d;
-            }
-            QTableWidget::item {
-                padding: 5px;
-                border: none;
-            }
-            QTableWidget::item:selected {
-                background-color: #2d862d;
-            }
-            QHeaderView::section {
-                background-color: #1f5c1f;
-                color: #33ff33;
-                border: 1px solid #1f5c1f;
-                padding: 5px;
-            }
-            QProgressBar {
-                border: 1px solid #1f5c1f;
-                background-color: #1a1a1a;
-                text-align: center;
-                color: #33ff33;
-            }
-            QProgressBar::chunk {
-                background-color: #2d862d;
-            }
-            QPushButton {
-                background-color: #1a1a1a;
-                color: #33ff33;
-                border: 1px solid #1f5c1f;
-                padding: 8px 16px;
-                border-radius: 3px;
-                font-family: 'Courier New';
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2d862d;
-                border: 1px solid #33ff33;
-            }
-            QPushButton:pressed {
-                background-color: #1f5c1f;
-            }
-            QTabWidget::pane {
-                border: 1px solid #1f5c1f;
-                background-color: #0a0a0a;
-            }
-            QTabBar::tab {
-                background-color: #1a1a1a;
-                color: #33ff33;
-                border: 1px solid #1f5c1f;
-                padding: 8px 16px;
-                margin-right: 2px;
-                font-family: 'Courier New';
-            }
-            QTabBar::tab:selected {
-                background-color: #2d862d;
-                border: 1px solid #33ff33;
-            }
-            QTabBar::tab:hover {
-                background-color: #1f5c1f;
-            }
-            QGroupBox {
-                border: 1px solid #1f5c1f;
-                border-radius: 3px;
-                margin-top: 1em;
-                padding-top: 1em;
-                color: #33ff33;
-                font-family: 'Courier New';
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-                padding: 0 5px;
-                color: #33ff33;
-            }
-            QStatusBar {
-                background-color: #1a1a1a;
-                color: #33ff33;
-                border-top: 1px solid #1f5c1f;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background-color: #1a1a1a;
-                width: 10px;
-                margin: 0;
-            }
-            QScrollBar::handle:vertical {
-                background-color: #2d862d;
-                min-height: 20px;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-            }
-            QLineEdit {
-                background-color: #1a1a1a;
-                color: #33ff33;
-                border: 1px solid #1f5c1f;
-                padding: 5px;
-                border-radius: 3px;
-            }
-            QLineEdit:focus {
-                border: 1px solid #33ff33;
-            }
-            QTextEdit {
-                background-color: #1a1a1a;
-                color: #33ff33;
-                border: 1px solid #1f5c1f;
-                padding: 5px;
-                border-radius: 3px;
-            }
-        """)
         
-        # Ana widget ve layout
-        self.merkez_widget = QWidget()
-        self.setCentralWidget(self.merkez_widget)
-        self.ana_layout = QVBoxLayout(self.merkez_widget)
+        # Pencere ayarları
+        self.setWindowTitle("ThreatTracker - Güvenlik İzleme Aracı")
+        self.setGeometry(100, 100, 1200, 800)
         
-        # Durum çubuğu
-        self.durum_cubugu = QStatusBar()
-        self.setStatusBar(self.durum_cubugu)
-        
-        # GUI bileşenlerini oluştur
-        self._gui_olustur()
+        # Arayüz bileşenlerini oluştur
+        self._arayuz_olustur()
         
         # Zamanlayıcıları başlat
         self._zamanlayicilari_baslat()
         
-        # İlk güncellemeyi yap
-        self._sistem_durumunu_guncelle()
-        self.durum_cubugu.showMessage("ThreatTracker initialized | Developed by Tolga Uğurlu | v1.0.0")
-        
-        # Ağ tarayıcısını başlat
-        self.ag_tarayici = NetworkScanner()
-        
-        # Zamanlayıcıyı başlat
-        self.tarama_zamanlayici = QTimer()
-        self.tarama_zamanlayici.timeout.connect(self._tarama_sonuclarini_kontrol_et)
-        self.tarama_zamanlayici.start(1000)  # Her saniye kontrol et
+        logger.info("Ana pencere başlatıldı")
     
-    def _gui_olustur(self):
-        """GUI bileşenlerini oluşturur."""
-        # Üst bilgi paneli
-        self._ust_panel_olustur()
+    def _arayuz_olustur(self):
+        """Kullanıcı arayüzünü oluşturur."""
+        # Ana widget ve layout
+        merkez_widget = QWidget()
+        self.setCentralWidget(merkez_widget)
         
-        # Tab widget
-        self.tab_widget = QTabWidget()
-        self.ana_layout.addWidget(self.tab_widget)
+        ana_layout = QVBoxLayout()
+        merkez_widget.setLayout(ana_layout)
         
-        # Sekmeleri oluştur
-        self._gosterge_paneli_olustur()
-        self._tehditler_sekmesi_olustur()
-        self._sistem_durumu_sekmesi_olustur()
-        self._ayarlar_sekmesi_olustur()
+        # Sekme widget'ı
+        sekmeler = QTabWidget()
+        ana_layout.addWidget(sekmeler)
+        
+        # Gösterge paneli sekmesi
+        gosterge_paneli = QWidget()
+        sekmeler.addTab(gosterge_paneli, "Gösterge Paneli")
+        self._gosterge_paneli_olustur(gosterge_paneli)
+        
+        # Tehditler sekmesi
+        tehditler = QWidget()
+        sekmeler.addTab(tehditler, "Tehditler")
+        self._tehditler_sekmesi_olustur(tehditler)
+        
+        # Sistem durumu sekmesi
+        sistem_durumu = QWidget()
+        sekmeler.addTab(sistem_durumu, "Sistem Durumu")
+        self._sistem_durumu_sekmesi_olustur(sistem_durumu)
+        
+        # Ayarlar sekmesi
+        ayarlar = QWidget()
+        sekmeler.addTab(ayarlar, "Ayarlar")
+        self._ayarlar_sekmesi_olustur(ayarlar)
+        
+        # Durum çubuğu
+        self.durum_cubugu = QStatusBar()
+        self.setStatusBar(self.durum_cubugu)
+        self.durum_cubugu.showMessage("Hazır")
     
-    def _ust_panel_olustur(self):
-        """Üst bilgi panelini oluşturur."""
-        ust_panel = QWidget()
-        ust_layout = QHBoxLayout(ust_panel)
+    def _gosterge_paneli_olustur(self, parent):
+        """Gösterge paneli sekmesini oluşturur."""
+        layout = QVBoxLayout()
+        parent.setLayout(layout)
         
-        # Logo ve başlık
-        baslik = QLabel("ThreatTracker")
-        baslik.setStyleSheet("""
-            font-size: 24px;
-            font-weight: bold;
-            font-family: 'Courier New';
-            color: #00ff00;
-        """)
-        
-        # Geliştirici bilgisi
-        gelistirici = QLabel("by Tolga Uğurlu")
-        gelistirici.setStyleSheet("""
-            font-size: 12px;
-            font-family: 'Courier New';
-            color: #00aa00;
-        """)
-        
-        baslik_layout = QVBoxLayout()
-        baslik_layout.addWidget(baslik)
-        baslik_layout.addWidget(gelistirici)
-        
-        ust_layout.addLayout(baslik_layout)
+        # Başlık
+        baslik = QLabel("Sistem Güvenlik Durumu")
+        baslik.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        baslik.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        layout.addWidget(baslik)
         
         # Durum göstergeleri
+        gostergeler_layout = QHBoxLayout()
+        
+        # CPU kullanımı
         self.cpu_progress = QProgressBar()
-        self.cpu_progress.setMaximumWidth(150)
+        self.cpu_progress.setMaximum(100)
+        self.cpu_label = QLabel("CPU: 0%")
+        cpu_layout = QVBoxLayout()
+        cpu_layout.addWidget(self.cpu_label)
+        cpu_layout.addWidget(self.cpu_progress)
+        gostergeler_layout.addLayout(cpu_layout)
+        
+        # RAM kullanımı
         self.ram_progress = QProgressBar()
-        self.ram_progress.setMaximumWidth(150)
+        self.ram_progress.setMaximum(100)
+        self.ram_label = QLabel("RAM: 0%")
+        ram_layout = QVBoxLayout()
+        ram_layout.addWidget(self.ram_label)
+        ram_layout.addWidget(self.ram_progress)
+        gostergeler_layout.addLayout(ram_layout)
         
-        cpu_label = QLabel("[CPU]")
-        ram_label = QLabel("[RAM]")
+        layout.addLayout(gostergeler_layout)
         
-        ust_layout.addStretch()
-        ust_layout.addWidget(cpu_label)
-        ust_layout.addWidget(self.cpu_progress)
-        ust_layout.addWidget(ram_label)
-        ust_layout.addWidget(self.ram_progress)
-        
-        self.ana_layout.addWidget(ust_panel)
-    
-    def _gosterge_paneli_olustur(self):
-        """Gösterge paneli sekmesini oluşturur."""
-        gosterge_widget = QWidget()
-        gosterge_layout = QVBoxLayout(gosterge_widget)
-        
-        # Ağ tarama kontrolleri
-        tarama_grup = QGroupBox("[Network Scanning Controls]")
-        tarama_layout = QHBoxLayout()
-        
-        self.tarama_baslat = QPushButton("Start Scan")
-        self.tarama_baslat.clicked.connect(self._ag_taramasi_baslat)
-        
-        self.deauth_baslat = QPushButton("Start Deauth")
-        self.deauth_baslat.clicked.connect(self._deauth_saldirisi_baslat)
-        
-        self.paket_yakala = QPushButton("Capture Packets")
-        self.paket_yakala.clicked.connect(self._paket_yakalama_baslat)
-        
-        for buton in [self.tarama_baslat, self.deauth_baslat, self.paket_yakala]:
-            tarama_layout.addWidget(buton)
-        
-        tarama_grup.setLayout(tarama_layout)
-        gosterge_layout.addWidget(tarama_grup)
-        
-        # Özet bilgiler
-        ozet_widget = QWidget()
-        ozet_layout = QHBoxLayout(ozet_widget)
-        
-        # Tehdit sayacı
-        self.tehdit_sayaci = QLabel("0")
-        self.tehdit_sayaci.setStyleSheet("""
-            font-size: 36px;
-            color: #ff0000;
-            background: #2a2a2a;
-            padding: 20px;
-            border: 1px solid #ff0000;
-            border-radius: 10px;
-        """)
-        
-        ozet_layout.addWidget(QLabel("[Active Threats]"))
-        ozet_layout.addWidget(self.tehdit_sayaci)
-        ozet_layout.addStretch()
-        
-        gosterge_layout.addWidget(ozet_widget)
-        
-        # Son olaylar tablosu
-        self.son_olaylar_tablo = QTableWidget()
-        self.son_olaylar_tablo.setColumnCount(4)
-        self.son_olaylar_tablo.setHorizontalHeaderLabels([
-            "Timestamp", "Type", "Source", "Message"
+        # Aktif bağlantılar tablosu
+        self.baglantilar_tablo = QTableWidget()
+        self.baglantilar_tablo.setColumnCount(5)
+        self.baglantilar_tablo.setHorizontalHeaderLabels([
+            "Protokol", "Yerel Adres", "Uzak Adres", "Durum", "PID"
         ])
-        self.son_olaylar_tablo.horizontalHeader().setStretchLastSection(True)
-        
-        gosterge_layout.addWidget(QLabel("[Recent Events]"))
-        gosterge_layout.addWidget(self.son_olaylar_tablo)
-        
-        self.tab_widget.addTab(gosterge_widget, "Dashboard")
+        layout.addWidget(self.baglantilar_tablo)
     
-    def _tehditler_sekmesi_olustur(self):
+    def _tehditler_sekmesi_olustur(self, parent):
         """Tehditler sekmesini oluşturur."""
-        tehditler_widget = QWidget()
-        tehditler_layout = QVBoxLayout(tehditler_widget)
+        layout = QVBoxLayout()
+        parent.setLayout(layout)
         
-        # Tehdit listesi
-        self.tehdit_tablosu = QTableWidget()
-        self.tehdit_tablosu.setColumnCount(5)
-        self.tehdit_tablosu.setHorizontalHeaderLabels([
-            "Tespit Zamanı", "Tehdit", "Seviye", "Kaynak", "Durum"
+        # Tehdit listesi tablosu
+        self.tehditler_tablo = QTableWidget()
+        self.tehditler_tablo.setColumnCount(5)
+        self.tehditler_tablo.setHorizontalHeaderLabels([
+            "Zaman", "Tehdit", "Seviye", "Kaynak", "Durum"
         ])
-        self.tehdit_tablosu.horizontalHeader().setStretchLastSection(True)
-        self.tehdit_tablosu.itemDoubleClicked.connect(self._tehdit_detaylarini_goster)
+        layout.addWidget(self.tehditler_tablo)
         
-        tehditler_layout.addWidget(self.tehdit_tablosu)
+        # Kontrol butonları
+        butonlar_layout = QHBoxLayout()
         
-        self.tab_widget.addTab(tehditler_widget, "Tehditler")
+        self.tara_buton = QPushButton("Güvenlik Taraması Başlat")
+        self.tara_buton.clicked.connect(self._guvenlik_taramasi_baslat)
+        butonlar_layout.addWidget(self.tara_buton)
+        
+        self.temizle_buton = QPushButton("Tehditleri Temizle")
+        self.temizle_buton.clicked.connect(self._tehditleri_temizle)
+        butonlar_layout.addWidget(self.temizle_buton)
+        
+        layout.addLayout(butonlar_layout)
     
-    def _tehdit_detaylarini_goster(self, item):
-        """Seçilen tehdidin detaylarını gösterir.
-        
-        Args:
-            item: Tıklanan tablo öğesi
-        """
-        row = item.row()
-        tehdit_bilgisi = {
-            'baslik': self.tehdit_tablosu.item(row, 1).text(),
-            'seviye': self.tehdit_tablosu.item(row, 2).text(),
-            'kaynak': self.tehdit_tablosu.item(row, 3).text(),
-            'durum': self.tehdit_tablosu.item(row, 4).text(),
-            'tespit_zamani': datetime.strptime(
-                self.tehdit_tablosu.item(row, 0).text(),
-                '%d.%m.%Y %H:%M:%S'
-            ),
-            'ilgili_olaylar': [
-                {
-                    'zaman': '12.01.2024 15:30:45',
-                    'tur': 'Port Tarama',
-                    'aciklama': 'Şüpheli port tarama aktivitesi tespit edildi'
-                },
-                {
-                    'zaman': '12.01.2024 15:31:00',
-                    'tur': 'Bağlantı Girişimi',
-                    'aciklama': 'Yüksek riskli porta bağlantı denemesi'
-                }
-            ],
-            'oneriler': [
-                'Şüpheli IP adresini güvenlik duvarında engelleyin',
-                'Sistem loglarını detaylı inceleyerek benzer aktiviteleri kontrol edin',
-                'İlgili portları geçici olarak kapatmayı değerlendirin',
-                'Güvenlik yazılımlarını güncelleyin'
-            ]
-        }
-        
-        analiz_penceresi = TehditAnalizPenceresi(tehdit_bilgisi)
-        analiz_penceresi.show()
-    
-    def _sistem_durumu_sekmesi_olustur(self):
+    def _sistem_durumu_sekmesi_olustur(self, parent):
         """Sistem durumu sekmesini oluşturur."""
-        sistem_widget = QWidget()
-        sistem_layout = QVBoxLayout(sistem_widget)
+        layout = QVBoxLayout()
+        parent.setLayout(layout)
         
-        # Sistem metrikleri
-        metrikler_widget = QWidget()
-        metrikler_layout = QHBoxLayout(metrikler_widget)
-        
-        self.cpu_label = QLabel("CPU: %0")
-        self.ram_label = QLabel("RAM: %0")
-        self.disk_label = QLabel("Disk: %0")
-        self.baglanti_label = QLabel("Bağlantı: 0")
-        
-        for label in [self.cpu_label, self.ram_label, 
-                     self.disk_label, self.baglanti_label]:
-            label.setStyleSheet("""
-                font-size: 18px;
-                padding: 10px;
-                background: #f5f5f5;
-                border-radius: 5px;
-            """)
-            metrikler_layout.addWidget(label)
-        
-        sistem_layout.addWidget(metrikler_widget)
-        
-        # Süreç listesi
-        self.surec_tablosu = QTableWidget()
-        self.surec_tablosu.setColumnCount(5)
-        self.surec_tablosu.setHorizontalHeaderLabels([
+        # Süreçler tablosu
+        self.surecler_tablo = QTableWidget()
+        self.surecler_tablo.setColumnCount(5)
+        self.surecler_tablo.setHorizontalHeaderLabels([
             "PID", "İsim", "CPU %", "RAM %", "Durum"
         ])
-        self.surec_tablosu.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.surecler_tablo)
         
-        sistem_layout.addWidget(QLabel("Aktif Süreçler:"))
-        sistem_layout.addWidget(self.surec_tablosu)
+        # Disk kullanımı
+        self.disk_label = QLabel("Disk Kullanımı: Hesaplanıyor...")
+        layout.addWidget(self.disk_label)
         
-        self.tab_widget.addTab(sistem_widget, "Sistem Durumu")
+        # Ağ kullanımı
+        self.ag_label = QLabel("Ağ Kullanımı: Hesaplanıyor...")
+        layout.addWidget(self.ag_label)
     
-    def _ayarlar_sekmesi_olustur(self):
+    def _ayarlar_sekmesi_olustur(self, parent):
         """Ayarlar sekmesini oluşturur."""
-        ayarlar_widget = AyarlarWidget()
-        ayarlar_widget.ayarlar_degisti.connect(self._ayarlar_degisti)
-        self.tab_widget.addTab(ayarlar_widget, "Ayarlar")
-    
-    def _ayarlar_degisti(self, yeni_ayarlar: dict):
-        """Ayarlar değiştiğinde çağrılır.
+        layout = QVBoxLayout()
+        parent.setLayout(layout)
         
-        Args:
-            yeni_ayarlar: Yeni ayarlar sözlüğü
-        """
-        # Bildirim aralıklarını güncelle
-        self.tehdit_zamanlayici.setInterval(
-            yeni_ayarlar['bildirim_araligi']['normal_tehditler'] * 1000
-        )
+        # Bildirim ayarları
+        bildirim_label = QLabel("Bildirim Ayarları")
+        bildirim_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(bildirim_label)
         
-        # Sistem durumu güncelleme aralığını güncelle
-        self.sistem_zamanlayici.setInterval(
-            yeni_ayarlar['bildirim_araligi']['sistem_durumlari'] * 1000
-        )
+        self.bildirim_buton = QPushButton("Bildirimleri Yapılandır")
+        layout.addWidget(self.bildirim_buton)
         
-        # TODO: Diğer ayarları uygula (bildirim sistemi, veritabanı temizleme, vs.)
-        logger.info("Ayarlar uygulandı")
+        # Tarama ayarları
+        tarama_label = QLabel("Tarama Ayarları")
+        tarama_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        layout.addWidget(tarama_label)
+        
+        self.tarama_buton = QPushButton("Tarama Ayarlarını Yapılandır")
+        layout.addWidget(self.tarama_buton)
+        
+        # Boşluk ekle
+        layout.addStretch()
     
     def _zamanlayicilari_baslat(self):
         """Güncelleme zamanlayıcılarını başlatır."""
-        # Sistem durumu güncellemesi (her 2 saniyede)
+        # Sistem durumu güncelleyici
         self.sistem_zamanlayici = QTimer()
         self.sistem_zamanlayici.timeout.connect(self._sistem_durumunu_guncelle)
-        self.sistem_zamanlayici.start(2000)
+        self.sistem_zamanlayici.start(2000)  # 2 saniyede bir
         
-        # Tehdit listesi güncellemesi (her 5 saniyede)
+        # Süreç listesi güncelleyici
+        self.surec_zamanlayici = QTimer()
+        self.surec_zamanlayici.timeout.connect(self._surecleri_guncelle)
+        self.surec_zamanlayici.start(5000)  # 5 saniyede bir
+        
+        # Tehdit listesi güncelleyici
         self.tehdit_zamanlayici = QTimer()
         self.tehdit_zamanlayici.timeout.connect(self._tehditleri_guncelle)
-        self.tehdit_zamanlayici.start(5000)
+        self.tehdit_zamanlayici.start(10000)  # 10 saniyede bir
     
     def _sistem_durumunu_guncelle(self):
-        """Sistem durumu metriklerini günceller."""
-        # CPU ve RAM kullanımı
-        cpu_yuzde = psutil.cpu_percent()
-        ram_yuzde = psutil.virtual_memory().percent
-        
-        self.cpu_progress.setValue(int(cpu_yuzde))
-        self.ram_progress.setValue(int(ram_yuzde))
-        
-        self.cpu_label.setText(f"CPU: %{cpu_yuzde:.1f}")
-        self.ram_label.setText(f"RAM: %{ram_yuzde:.1f}")
-        
-        # Disk kullanımı
-        disk = psutil.disk_usage('/')
-        disk_yuzde = disk.percent
-        self.disk_label.setText(f"Disk: %{disk_yuzde:.1f}")
-        
-        # Ağ bağlantıları
+        """Sistem durumu göstergelerini günceller."""
         try:
-            baglanti_sayisi = len(psutil.net_connections())
-        except (psutil.AccessDenied, psutil.Error):
-            baglanti_sayisi = 0
-        self.baglanti_label.setText(f"Bağlantı: {baglanti_sayisi}")
+            # CPU ve RAM kullanımı
+            cpu_yuzde = psutil.cpu_percent()
+            ram_yuzde = psutil.virtual_memory().percent
+            
+            self.cpu_progress.setValue(int(cpu_yuzde))
+            self.cpu_label.setText(f"CPU: %{cpu_yuzde:.1f}")
+            
+            self.ram_progress.setValue(int(ram_yuzde))
+            self.ram_label.setText(f"RAM: %{ram_yuzde:.1f}")
+            
+            # Disk kullanımı
+            disk = psutil.disk_usage('/')
+            self.disk_label.setText(
+                f"Disk Kullanımı: %{disk.percent:.1f} "
+                f"(Toplam: {disk.total // (2**30)} GB, "
+                f"Boş: {disk.free // (2**30)} GB)"
+            )
+            
+            # Ağ kullanımı
+            ag = psutil.net_io_counters()
+            self.ag_label.setText(
+                f"Ağ Kullanımı - Gönderilen: {ag.bytes_sent // (2**20)} MB, "
+                f"Alınan: {ag.bytes_recv // (2**20)} MB"
+            )
+            
+            # Aktif bağlantılar
+            self.baglantilar_tablo.setRowCount(0)
+            for conn in psutil.net_connections():
+                row = self.baglantilar_tablo.rowCount()
+                self.baglantilar_tablo.insertRow(row)
+                
+                self.baglantilar_tablo.setItem(
+                    row, 0, QTableWidgetItem(conn.type)
+                )
+                self.baglantilar_tablo.setItem(
+                    row, 1, QTableWidgetItem(f"{conn.laddr.ip}:{conn.laddr.port}")
+                )
+                if conn.raddr:
+                    self.baglantilar_tablo.setItem(
+                        row, 2, 
+                        QTableWidgetItem(f"{conn.raddr.ip}:{conn.raddr.port}")
+                    )
+                else:
+                    self.baglantilar_tablo.setItem(row, 2, QTableWidgetItem("-"))
+                self.baglantilar_tablo.setItem(
+                    row, 3, QTableWidgetItem(conn.status)
+                )
+                self.baglantilar_tablo.setItem(
+                    row, 4, QTableWidgetItem(str(conn.pid or "-"))
+                )
         
-        # Süreç listesini güncelle
-        self._surecleri_guncelle()
+        except Exception as e:
+            logger.error(f"Sistem durumu güncellenirken hata: {e}")
+            self.durum_cubugu.showMessage(
+                "Sistem durumu güncellenirken hata oluştu!", 5000
+            )
     
     def _surecleri_guncelle(self):
         """Süreç listesini günceller."""
-        self.surec_tablosu.setRowCount(0)
+        try:
+            self.surecler_tablo.setRowCount(0)
+            for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 
+                                          'memory_percent', 'status']):
+                try:
+                    bilgi = proc.info
+                    row = self.surecler_tablo.rowCount()
+                    self.surecler_tablo.insertRow(row)
+                    
+                    self.surecler_tablo.setItem(
+                        row, 0, QTableWidgetItem(str(bilgi['pid']))
+                    )
+                    self.surecler_tablo.setItem(
+                        row, 1, QTableWidgetItem(bilgi['name'])
+                    )
+                    self.surecler_tablo.setItem(
+                        row, 2, QTableWidgetItem(f"{bilgi['cpu_percent']:.1f}")
+                    )
+                    self.surecler_tablo.setItem(
+                        row, 3, QTableWidgetItem(f"{bilgi['memory_percent']:.1f}")
+                    )
+                    self.surecler_tablo.setItem(
+                        row, 4, QTableWidgetItem(bilgi['status'])
+                    )
+                except:
+                    continue
         
-        for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 
-                                       'memory_percent', 'status']):
-            try:
-                bilgi = proc.info
-                row = self.surec_tablosu.rowCount()
-                self.surec_tablosu.insertRow(row)
-                
-                self.surec_tablosu.setItem(row, 0, QTableWidgetItem(str(bilgi['pid'])))
-                self.surec_tablosu.setItem(row, 1, QTableWidgetItem(str(bilgi['name'])))
-                
-                cpu_percent = bilgi['cpu_percent']
-                self.surec_tablosu.setItem(row, 2, QTableWidgetItem(
-                    f"{cpu_percent:.1f}" if cpu_percent is not None else "0.0"
-                ))
-                
-                memory_percent = bilgi['memory_percent']
-                self.surec_tablosu.setItem(row, 3, QTableWidgetItem(
-                    f"{memory_percent:.1f}" if memory_percent is not None else "0.0"
-                ))
-                
-                self.surec_tablosu.setItem(row, 4, QTableWidgetItem(str(bilgi['status'])))
-                
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
+        except Exception as e:
+            logger.error(f"Süreç listesi güncellenirken hata: {e}")
+            self.durum_cubugu.showMessage(
+                "Süreç listesi güncellenirken hata oluştu!", 5000
+            )
     
     def _tehditleri_guncelle(self):
         """Tehdit listesini günceller."""
-        # Örnek tehdit verisi
-        tehditler = [
-            {
-                'zaman': '30.12.2023 21:15:00',
-                'tehdit': 'Port Tarama Saldırısı',
-                'seviye': 'Yüksek',
-                'kaynak': '192.168.1.100',
-                'durum': 'Aktif'
-            },
-            {
-                'zaman': '30.12.2023 21:14:30',
-                'tehdit': 'Şüpheli Dosya Erişimi',
-                'seviye': 'Orta',
-                'kaynak': 'C:/Windows/System32',
-                'durum': 'İnceleniyor'
-            },
-            {
-                'zaman': '30.12.2023 21:13:45',
-                'tehdit': 'Yüksek CPU Kullanımı',
-                'seviye': 'Düşük',
-                'kaynak': 'chrome.exe',
-                'durum': 'İzleniyor'
-            }
-        ]
-        
-        self.tehdit_tablosu.setRowCount(len(tehditler))
-        for i, tehdit in enumerate(tehditler):
-            self.tehdit_tablosu.setItem(i, 0, QTableWidgetItem(tehdit['zaman']))
-            self.tehdit_tablosu.setItem(i, 1, QTableWidgetItem(tehdit['tehdit']))
-            self.tehdit_tablosu.setItem(i, 2, QTableWidgetItem(tehdit['seviye']))
-            self.tehdit_tablosu.setItem(i, 3, QTableWidgetItem(tehdit['kaynak']))
-            self.tehdit_tablosu.setItem(i, 4, QTableWidgetItem(tehdit['durum']))
-            
-            # Seviyeye göre renklendirme
-            renk = QColor()
-            if tehdit['seviye'] == 'Yüksek':
-                renk = QColor('#ffebee')  # Açık kırmızı
-            elif tehdit['seviye'] == 'Orta':
-                renk = QColor('#fff3e0')  # Açık turuncu
-            else:
-                renk = QColor('#f1f8e9')  # Açık yeşil
-            
-            for j in range(5):
-                self.tehdit_tablosu.item(i, j).setBackground(renk)
-        
-        # Tehdit sayacını güncelle
-        aktif_tehdit_sayisi = sum(1 for t in tehditler if t['durum'] == 'Aktif')
-        self.tehdit_sayaci.setText(str(aktif_tehdit_sayisi))
-    
-    def _ag_taramasi_baslat(self):
-        """Ağ taramasını başlatır."""
         try:
-            # Varsayılan ağ arayüzünü bul
-            varsayilan_ag = netifaces.gateways()['default'][netifaces.AF_INET][1]
-            ag_adresleri = netifaces.ifaddresses(varsayilan_ag)
-            ip_adresi = ag_adresleri[netifaces.AF_INET][0]['addr']
+            # Örnek tehdit verileri (gerçek uygulamada bu veriler
+            # anomali tespiti ve güvenlik taraması sonuçlarından gelecek)
+            tehditler = [
+                {
+                    'zaman': datetime.datetime.now().strftime('%H:%M:%S'),
+                    'tehdit': 'Port Tarama Girişimi',
+                    'seviye': 'Yüksek',
+                    'kaynak': '192.168.1.100',
+                    'durum': 'Aktif'
+                },
+                {
+                    'zaman': datetime.datetime.now().strftime('%H:%M:%S'),
+                    'tehdit': 'Şüpheli Bağlantı',
+                    'seviye': 'Orta',
+                    'kaynak': '10.0.0.50',
+                    'durum': 'İnceleniyor'
+                }
+            ]
             
-            # IP aralığını belirle (örn: 192.168.1.0/24)
-            ip_araligi = '.'.join(ip_adresi.split('.')[:-1]) + '.0/24'
-            
-            # Taramayı başlat
-            self.ag_tarayici.ag_taramasi_baslat(ip_araligi)
-            self.durum_cubugu.showMessage(f"Network scanning started on {ip_araligi}...")
-            
-            # Butonları güncelle
-            self.tarama_baslat.setText("Stop Scan")
-            self.tarama_baslat.clicked.disconnect()
-            self.tarama_baslat.clicked.connect(self._ag_taramasini_durdur)
-            
-        except Exception as e:
-            self.durum_cubugu.showMessage(f"Error starting network scan: {e}")
-    
-    def _ag_taramasini_durdur(self):
-        """Ağ taramasını durdurur."""
-        self.ag_tarayici.ag_taramasini_durdur()
-        self.durum_cubugu.showMessage("Network scanning stopped.")
-        
-        # Butonları güncelle
-        self.tarama_baslat.setText("Start Scan")
-        self.tarama_baslat.clicked.disconnect()
-        self.tarama_baslat.clicked.connect(self._ag_taramasi_baslat)
-    
-    def _tarama_sonuclarini_kontrol_et(self):
-        """Tarama sonuçlarını kontrol eder ve arayüzü günceller."""
-        try:
-            while not self.ag_tarayici.sonuc_kuyrugu.empty():
-                sonuc = self.ag_tarayici.sonuc_kuyrugu.get_nowait()
+            self.tehditler_tablo.setRowCount(0)
+            for tehdit in tehditler:
+                row = self.tehditler_tablo.rowCount()
+                self.tehditler_tablo.insertRow(row)
                 
-                if sonuc['tip'] == 'cihaz_tespit':
-                    cihaz = sonuc['veri']
-                    self._cihaz_ekle(cihaz)
-                elif sonuc['tip'] == 'hata':
-                    self.durum_cubugu.showMessage(f"Scan error: {sonuc['veri']}")
+                self.tehditler_tablo.setItem(
+                    row, 0, QTableWidgetItem(tehdit['zaman'])
+                )
+                self.tehditler_tablo.setItem(
+                    row, 1, QTableWidgetItem(tehdit['tehdit'])
+                )
+                self.tehditler_tablo.setItem(
+                    row, 2, QTableWidgetItem(tehdit['seviye'])
+                )
+                self.tehditler_tablo.setItem(
+                    row, 3, QTableWidgetItem(tehdit['kaynak'])
+                )
+                self.tehditler_tablo.setItem(
+                    row, 4, QTableWidgetItem(tehdit['durum'])
+                )
         
         except Exception as e:
-            self.durum_cubugu.showMessage(f"Error processing scan results: {e}")
-    
-    def _cihaz_ekle(self, cihaz: dict):
-        """Tespit edilen cihazı tabloya ekler.
-        
-        Args:
-            cihaz: Cihaz bilgilerini içeren sözlük
-        """
-        row = self.son_olaylar_tablo.rowCount()
-        self.son_olaylar_tablo.insertRow(row)
-        
-        self.son_olaylar_tablo.setItem(row, 0, QTableWidgetItem(cihaz['tespit_zamani']))
-        self.son_olaylar_tablo.setItem(row, 1, QTableWidgetItem("Device Found"))
-        self.son_olaylar_tablo.setItem(row, 2, QTableWidgetItem(cihaz['ip']))
-        
-        # Açık port bilgilerini ekle
-        acik_port_mesaji = []
-        for port in cihaz.get('acik_portlar', []):
-            acik_port_mesaji.append(
-                f"Port {port['port']} ({port['servis']})"
+            logger.error(f"Tehdit listesi güncellenirken hata: {e}")
+            self.durum_cubugu.showMessage(
+                "Tehdit listesi güncellenirken hata oluştu!", 5000
             )
-        
-        mesaj = f"MAC: {cihaz['mac']}"
-        if acik_port_mesaji:
-            mesaj += f" | Open Ports: {', '.join(acik_port_mesaji)}"
-        
-        self.son_olaylar_tablo.setItem(row, 3, QTableWidgetItem(mesaj))
-        
-        # Satırı yeşil yap
-        for j in range(4):
-            self.son_olaylar_tablo.item(row, j).setBackground(QColor('#004400'))
     
-    def _deauth_saldirisi_baslat(self):
-        """Deauth saldırısını başlatır."""
-        # TODO: Deauth saldırısı mantığı eklenecek
-        self.durum_cubugu.showMessage("Deauth attack initiated...")
+    def _guvenlik_taramasi_baslat(self):
+        """Güvenlik taraması başlatır."""
+        self.durum_cubugu.showMessage("Güvenlik taraması başlatılıyor...")
+        self.tara_buton.setEnabled(False)
+        # TODO: Güvenlik taraması işlemleri
+        
+    def _tehditleri_temizle(self):
+        """Tehdit listesini temizler."""
+        self.tehditler_tablo.setRowCount(0)
+        self.durum_cubugu.showMessage("Tehdit listesi temizlendi")
     
-    def _paket_yakalama_baslat(self):
-        """Paket yakalamayı başlatır."""
-        # TODO: Paket yakalama mantığı eklenecek
-        self.durum_cubugu.showMessage("Packet capture started...") 
+    def closeEvent(self, event):
+        """Pencere kapatılırken çağrılır."""
+        # Zamanlayıcıları durdur
+        self.sistem_zamanlayici.stop()
+        self.surec_zamanlayici.stop()
+        self.tehdit_zamanlayici.stop()
+        
+        logger.info("Ana pencere kapatıldı")
+        event.accept() 
