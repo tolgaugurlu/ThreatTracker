@@ -12,6 +12,7 @@ from typing import Dict, List
 import os
 import psutil
 from datetime import datetime
+from .settings_widget import AyarlarWidget
 
 class AnaEkran(QMainWindow):
     """ThreatTracker ana pencere sınıfı."""
@@ -193,8 +194,28 @@ class AnaEkran(QMainWindow):
     
     def _ayarlar_sekmesi_olustur(self):
         """Ayarlar sekmesini oluşturur."""
-        # TODO: Ayarlar sekmesi içeriği eklenecek
-        self.tab_widget.addTab(QWidget(), "Ayarlar")
+        ayarlar_widget = AyarlarWidget()
+        ayarlar_widget.ayarlar_degisti.connect(self._ayarlar_degisti)
+        self.tab_widget.addTab(ayarlar_widget, "Ayarlar")
+    
+    def _ayarlar_degisti(self, yeni_ayarlar: dict):
+        """Ayarlar değiştiğinde çağrılır.
+        
+        Args:
+            yeni_ayarlar: Yeni ayarlar sözlüğü
+        """
+        # Bildirim aralıklarını güncelle
+        self.tehdit_zamanlayici.setInterval(
+            yeni_ayarlar['bildirim_araligi']['normal_tehditler'] * 1000
+        )
+        
+        # Sistem durumu güncelleme aralığını güncelle
+        self.sistem_zamanlayici.setInterval(
+            yeni_ayarlar['bildirim_araligi']['sistem_durumlari'] * 1000
+        )
+        
+        # TODO: Diğer ayarları uygula (bildirim sistemi, veritabanı temizleme, vs.)
+        logger.info("Ayarlar uygulandı")
     
     def _zamanlayicilari_baslat(self):
         """Güncelleme zamanlayıcılarını başlatır."""
