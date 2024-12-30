@@ -2,106 +2,142 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-import os
 import numpy as np
-from src.ml.anomaly_detector import AnomaliTespitEdici
+from src.ml.anomaly_detector import AnomalyDetector
 
 @pytest.fixture
-def anomali_tespitedici():
-    """Test için AnomaliTespitEdici örneği oluşturur."""
-    return AnomaliTespitEdici(model_dizini="test_models")
+def anomaly_detector():
+    """Test için AnomalyDetector örneği oluşturur."""
+    return AnomalyDetector()
 
-@pytest.fixture
-def ornek_sistem_durumlari():
-    """Test için örnek sistem durumu verileri oluşturur."""
-    return [
+def test_ozellikleri_cikar(anomaly_detector):
+    """_ozellikleri_cikar metodunu test eder."""
+    ag_trafigi = {
+        'paket_sayisi': 100,
+        'bayt_sayisi': 1500,
+        'ortalama_paket_boyutu': 150,
+        'paket_aralik_suresi': 0.1,
+        'protokol_turu': 6,  # TCP
+        'port_numarasi': 80,
+        'baglanti_suresi': 5.0
+    }
+    
+    ozellikler = anomaly_detector._ozellikleri_cikar(ag_trafigi)
+    
+    assert len(ozellikler) == 7
+    assert ozellikler[0] == 100.0
+    assert ozellikler[1] == 1500.0
+    assert ozellikler[2] == 150.0
+    assert ozellikler[3] == 0.1
+    assert ozellikler[4] == 6.0
+    assert ozellikler[5] == 80.0
+    assert ozellikler[6] == 5.0
+
+def test_egit(anomaly_detector):
+    """egit metodunu test eder."""
+    egitim_verileri = [
         {
-            'cpu_kullanimi': 30.0,
-            'ram_kullanimi': 45.0,
-            'disk_kullanimi': 60.0,
-            'aktif_baglanti_sayisi': 100
+            'paket_sayisi': 100,
+            'bayt_sayisi': 1500,
+            'ortalama_paket_boyutu': 150,
+            'paket_aralik_suresi': 0.1,
+            'protokol_turu': 6,
+            'port_numarasi': 80,
+            'baglanti_suresi': 5.0
         },
         {
-            'cpu_kullanimi': 40.0,
-            'ram_kullanimi': 55.0,
-            'disk_kullanimi': 65.0,
-            'aktif_baglanti_sayisi': 150
-        },
-        # Anormal durumlar
-        {
-            'cpu_kullanimi': 95.0,
-            'ram_kullanimi': 90.0,
-            'disk_kullanimi': 95.0,
-            'aktif_baglanti_sayisi': 2000
+            'paket_sayisi': 200,
+            'bayt_sayisi': 3000,
+            'ortalama_paket_boyutu': 150,
+            'paket_aralik_suresi': 0.2,
+            'protokol_turu': 17,  # UDP
+            'port_numarasi': 443,
+            'baglanti_suresi': 10.0
         }
     ]
-
-def test_veri_hazirlama(anomali_tespitedici, ornek_sistem_durumlari):
-    """Veri hazırlama fonksiyonunu test eder."""
-    X = anomali_tespitedici.veri_hazirla(ornek_sistem_durumlari)
-    assert isinstance(X, np.ndarray)
-    assert X.shape == (3, 4)  # 3 örnek, 4 özellik
-
-def test_model_egitme_ve_kaydetme(anomali_tespitedici, ornek_sistem_durumlari):
-    """Model eğitme ve kaydetme işlemlerini test eder."""
-    anomali_tespitedici.model_egit(ornek_sistem_durumlari)
     
-    # Model dosyalarının oluşturulduğunu kontrol et
-    assert os.path.exists(os.path.join("test_models", "isolation_forest.joblib"))
-    assert os.path.exists(os.path.join("test_models", "one_class_svm.joblib"))
-    assert os.path.exists(os.path.join("test_models", "scaler.joblib"))
+    anomaly_detector.egit(egitim_verileri)
+    assert anomaly_detector.model is not None
 
-def test_model_yukleme(anomali_tespitedici, ornek_sistem_durumlari):
-    """Model yükleme işlemini test eder."""
-    # Önce modeli eğit ve kaydet
-    anomali_tespitedici.model_egit(ornek_sistem_durumlari)
+def test_anomali_tespit_et(anomaly_detector):
+    """anomali_tespit_et metodunu test eder."""
+    # Önce modeli eğit
+    egitim_verileri = [
+        {
+            'paket_sayisi': 100,
+            'bayt_sayisi': 1500,
+            'ortalama_paket_boyutu': 150,
+            'paket_aralik_suresi': 0.1,
+            'protokol_turu': 6,
+            'port_numarasi': 80,
+            'baglanti_suresi': 5.0
+        } for _ in range(100)  # 100 normal örnek
+    ]
+    anomaly_detector.egit(egitim_verileri)
     
-    # Yeni bir tespitedici oluştur ve modeli yükle
-    yeni_tespitedici = AnomaliTespitEdici(model_dizini="test_models")
-    basarili = yeni_tespitedici.model_yukle()
-    assert basarili == True
-
-def test_normal_durum_tespiti(anomali_tespitedici, ornek_sistem_durumlari):
-    """Normal sistem durumu tespitini test eder."""
-    # Modeli eğit
-    anomali_tespitedici.model_egit(ornek_sistem_durumlari)
-    
-    # Normal bir durum test et
-    normal_durum = {
-        'cpu_kullanimi': 35.0,
-        'ram_kullanimi': 50.0,
-        'disk_kullanimi': 62.0,
-        'aktif_baglanti_sayisi': 120
+    # Normal trafik
+    normal_trafik = {
+        'paket_sayisi': 150,
+        'bayt_sayisi': 2000,
+        'ortalama_paket_boyutu': 150,
+        'paket_aralik_suresi': 0.15,
+        'protokol_turu': 6,
+        'port_numarasi': 80,
+        'baglanti_suresi': 7.0
     }
     
-    anomali_var, skor, aciklama = anomali_tespitedici.anomali_tespit_et(normal_durum)
-    assert anomali_var == False
-    assert 0 <= skor <= 1
-    assert "Normal sistem davranışı" in aciklama
-
-def test_anomali_tespiti(anomali_tespitedici, ornek_sistem_durumlari):
-    """Anormal sistem durumu tespitini test eder."""
-    # Modeli eğit
-    anomali_tespitedici.model_egit(ornek_sistem_durumlari)
-    
-    # Anormal bir durum test et
-    anormal_durum = {
-        'cpu_kullanimi': 95.0,
-        'ram_kullanimi': 92.0,
-        'disk_kullanimi': 98.0,
-        'aktif_baglanti_sayisi': 3000
+    # Anormal trafik (çok yüksek paket sayısı)
+    anormal_trafik = {
+        'paket_sayisi': 10000,
+        'bayt_sayisi': 150000,
+        'ortalama_paket_boyutu': 150,
+        'paket_aralik_suresi': 0.01,
+        'protokol_turu': 6,
+        'port_numarasi': 80,
+        'baglanti_suresi': 5.0
     }
     
-    anomali_var, skor, aciklama = anomali_tespitedici.anomali_tespit_et(anormal_durum)
-    assert anomali_var == True
-    assert 0 <= skor <= 1
-    assert "Yüksek CPU kullanımı" in aciklama
-    assert "Yüksek RAM kullanımı" in aciklama
-    assert "Kritik disk kullanımı" in aciklama
-    assert "Yüksek bağlantı sayısı" in aciklama
+    # Test et
+    normal_sonuc, normal_skor = anomaly_detector.anomali_tespit_et(normal_trafik)
+    anormal_sonuc, anormal_skor = anomaly_detector.anomali_tespit_et(anormal_trafik)
+    
+    assert not normal_sonuc  # Normal trafik için False
+    assert normal_skor < 0.8  # Normal trafik için düşük skor
+    assert anormal_sonuc  # Anormal trafik için True
+    assert anormal_skor > 0.8  # Anormal trafik için yüksek skor
 
-def teardown_module(module):
-    """Test sonrası temizlik işlemleri."""
-    import shutil
-    if os.path.exists("test_models"):
-        shutil.rmtree("test_models") 
+def test_anomali_raporu_olustur(anomaly_detector):
+    """anomali_raporu_olustur metodunu test eder."""
+    ag_trafigi = {
+        'paket_sayisi': 10000,  # Anormal yüksek
+        'bayt_sayisi': 150000,
+        'ortalama_paket_boyutu': 150,
+        'paket_aralik_suresi': 0.01,
+        'protokol_turu': 6,
+        'port_numarasi': 80,
+        'baglanti_suresi': 5.0
+    }
+    
+    rapor = anomaly_detector.anomali_raporu_olustur(
+        ag_trafigi,
+        anomali_var=True,
+        anomali_skoru=0.95
+    )
+    
+    assert isinstance(rapor, dict)
+    assert rapor['anomali_var'] is True
+    assert float(rapor['anomali_skoru']) == 0.95
+    assert rapor['risk_seviyesi'] == 'YÜKSEK'
+    assert rapor['anomali_turu'] == 'Yüksek Paket Sayısı (Olası DoS)'
+    assert isinstance(rapor['oneriler'], list)
+    assert len(rapor['oneriler']) > 0
+
+def test_anomali_onerileri_olustur(anomaly_detector):
+    """_anomali_onerileri_olustur metodunu test eder."""
+    oneriler = anomaly_detector._anomali_onerileri_olustur('Yüksek Paket Sayısı (Olası DoS)')
+    
+    assert isinstance(oneriler, list)
+    assert len(oneriler) == 3
+    assert "Güvenlik duvarı kurallarını gözden geçirin" in oneriler
+    assert "Rate limiting uygulayın" in oneriler
+    assert "DDoS koruma servisleri kullanmayı değerlendirin" in oneriler 
