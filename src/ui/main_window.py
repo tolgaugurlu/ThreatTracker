@@ -11,6 +11,7 @@ from PyQt6.QtGui import QFont, QPalette, QColor
 import psutil
 import datetime
 from loguru import logger
+import socket
 
 class MainWindow(QMainWindow):
     """Ana pencere sınıfı."""
@@ -204,13 +205,13 @@ class MainWindow(QMainWindow):
         try:
             # CPU ve RAM kullanımı
             cpu_yuzde = psutil.cpu_percent()
-            ram_yuzde = psutil.virtual_memory().percent
+            ram = psutil.virtual_memory()
             
             self.cpu_progress.setValue(int(cpu_yuzde))
             self.cpu_label.setText(f"CPU: %{cpu_yuzde:.1f}")
             
-            self.ram_progress.setValue(int(ram_yuzde))
-            self.ram_label.setText(f"RAM: %{ram_yuzde:.1f}")
+            self.ram_progress.setValue(int(ram.percent))
+            self.ram_label.setText(f"RAM: %{ram.percent:.1f}")
             
             # Disk kullanımı
             disk = psutil.disk_usage('/')
@@ -229,32 +230,59 @@ class MainWindow(QMainWindow):
             
             # Aktif bağlantılar
             self.baglantilar_tablo.setRowCount(0)
-            for conn in psutil.net_connections():
-                row = self.baglantilar_tablo.rowCount()
-                self.baglantilar_tablo.insertRow(row)
-                
-                self.baglantilar_tablo.setItem(
-                    row, 0, QTableWidgetItem(conn.type)
-                )
-                self.baglantilar_tablo.setItem(
-                    row, 1, QTableWidgetItem(f"{conn.laddr.ip}:{conn.laddr.port}")
-                )
-                if conn.raddr:
+            try:
+                for conn in psutil.net_connections(kind='inet'):
+                    row = self.baglantilar_tablo.rowCount()
+                    self.baglantilar_tablo.insertRow(row)
+                    
+                    # Protokol
                     self.baglantilar_tablo.setItem(
-                        row, 2, 
-                        QTableWidgetItem(f"{conn.raddr.ip}:{conn.raddr.port}")
+                        row, 0, QTableWidgetItem(
+                            'TCP' if conn.type == socket.SOCK_STREAM else 'UDP'
+                        )
                     )
-                else:
-                    self.baglantilar_tablo.setItem(row, 2, QTableWidgetItem("-"))
-                self.baglantilar_tablo.setItem(
-                    row, 3, QTableWidgetItem(conn.status)
-                )
-                self.baglantilar_tablo.setItem(
-                    row, 4, QTableWidgetItem(str(conn.pid or "-"))
-                )
+                    
+                    # Yerel adres
+                    if conn.laddr:
+                        self.baglantilar_tablo.setItem(
+                            row, 1, QTableWidgetItem(
+                                f"{conn.laddr.ip}:{conn.laddr.port}"
+                            )
+                        )
+                    else:
+                        self.baglantilar_tablo.setItem(
+                            row, 1, QTableWidgetItem("-")
+                        )
+                    
+                    # Uzak adres
+                    if conn.raddr:
+                        self.baglantilar_tablo.setItem(
+                            row, 2, QTableWidgetItem(
+                                f"{conn.raddr.ip}:{conn.raddr.port}"
+                            )
+                        )
+                    else:
+                        self.baglantilar_tablo.setItem(
+                            row, 2, QTableWidgetItem("-")
+                        )
+                    
+                    # Durum
+                    self.baglantilar_tablo.setItem(
+                        row, 3, QTableWidgetItem(conn.status or "-")
+                    )
+                    
+                    # PID
+                    self.baglantilar_tablo.setItem(
+                        row, 4, QTableWidgetItem(str(conn.pid or "-"))
+                    )
+            
+            except psutil.AccessDenied:
+                logger.warning("Ağ bağlantıları bilgilerine erişim reddedildi")
+            
+            self.durum_cubugu.showMessage("Sistem durumu güncellendi")
         
         except Exception as e:
-            logger.error(f"Sistem durumu güncellenirken hata: {e}")
+            logger.error(f"Sistem durumu güncellenirken hata: {str(e)}")
             self.durum_cubugu.showMessage(
                 "Sistem durumu güncellenirken hata oluştu!", 5000
             )
