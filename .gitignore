@@ -1,0 +1,27 @@
+# Sistem dosyaları
+.DS_Store
+.env
+.env.local
+.env.*.local
+
+# IDE dosyaları
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Bağımlılık dizinleri
+node_modules/
+venv/
+__pycache__/
+
+# Log dosyaları
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build çıktıları
+dist/
+build/
+*.pyc 
